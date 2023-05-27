@@ -54,14 +54,14 @@ func Open(path string) (*Webcam, error) {
 	}
 
 	w := new(Webcam)
-	w.fd = uintptr(fd)
+	w.fd = fd
 	w.bufcount = 256
 	return w, nil
 }
 
 // Returns image formats supported by the device alongside with
 // their text description
-// Not that this function is somewhat experimental. Frames are not ordered in
+// Note that this function is somewhat experimental. Frames are not ordered in
 // any meaning, also duplicates can occur so it's up to developer to clean it up.
 // See http://linuxtv.org/downloads/v4l-dvb-apis/vidioc-enum-framesizes.html
 // for more information
@@ -86,6 +86,26 @@ func (w *Webcam) GetSupportedFormats() map[PixelFormat]string {
 	return result
 }
 
+// GetName returns the human-readable name of the device
+func (w *Webcam) GetName() (string, error) {
+	return getName(w.fd)
+}
+
+// GetBusInfo returns the location of the device in the system
+func (w *Webcam) GetBusInfo() (string, error) {
+	return getBusInfo(w.fd)
+}
+
+// SelectInput selects the current video input.
+func (w *Webcam) SelectInput(index uint32) error {
+	return selectInput(w.fd, index)
+}
+
+// GetInput queries the current video input.
+func (w *Webcam) GetInput() (int32, error) {
+	return getInput(w.fd)
+}
+
 // Returns supported frame sizes for a given image format
 func (w *Webcam) GetSupportedFrameSizes(f PixelFormat) []FrameSize {
 	result := make([]FrameSize, 0)
@@ -101,6 +121,26 @@ func (w *Webcam) GetSupportedFrameSizes(f PixelFormat) []FrameSize {
 		}
 
 		result = append(result, s)
+	}
+
+	return result
+}
+
+// GetSupportedFramerates returns supported frame rates for a given image format and frame size.
+func (w *Webcam) GetSupportedFramerates(fp PixelFormat, width uint32, height uint32) []FrameRate {
+	var result []FrameRate
+	var index uint32
+	var err error
+
+	// keep incrementing the index value until we get an EINVAL error
+	index = 0
+	for err == nil {
+		r, err := getFrameInterval(w.fd, index, uint32(fp), width, height)
+		if err != nil {
+			break
+		}
+		result = append(result, r)
+		index++
 	}
 
 	return result
